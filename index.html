@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>움바 움바 세계수도송</title>
+<style>
+  :root{
+    --bg:#0b0620;
+    --bg2:#1b0a3a;
+    --neon:#ff4ecd;
+    --neon2:#3ef2ff;
+    --lime:#b4ff3a;
+    --gold:#ffd93d;
+    --card:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.14);
+    --txt:#f4f0ff;
+    --dim:rgba(244,240,255,.55);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-apple-system,sans-serif;
+    color:var(--txt);
+    background:
+      radial-gradient(1200px 700px at 20% -10%, #45107a 0%, transparent 60%),
+      radial-gradient(900px 600px at 90% 110%, #0d4d6e 0%, transparent 60%),
+      linear-gradient(160deg,var(--bg),var(--bg2));
+    background-attachment:fixed;
+    overflow:hidden;
+    user-select:none;
+  }
+  #app{
+    position:relative;
+    height:100dvh;
+    max-width:520px;
+    margin:0 auto;
+    display:flex;
+    flex-direction:column;
+    padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  /* ---------- 배경 펄스 ---------- */
+  #pulse{
+    position:fixed; inset:0; pointer-events:none;
+    background:radial-gradient(circle at 50% 45%, rgba(255,78,205,.30), transparent 55%);
+    opacity:0; transition:opacity .12s ease-out;
+  }
+
+  /* ---------- 상단 HUD ---------- */
+  .hud{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
+  .hud .box{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:7px 11px;line-height:1.15;
+  }
+  .hud .lbl{font-size:10px;color:var(--dim);letter-spacing:.08em}
+  .hud .val{font-size:17px;font-weight:800}
+  .hearts{margin-left:auto;font-size:18px;letter-spacing:1px}
+  .heart.off{opacity:.2;filter:grayscale(1)}
+  #combo{color:var(--gold)}
+
+  /* ---------- 움바 후렴 바 ---------- */
+  .chant{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0 10px;
+  }
+  .syl{
+    text-align:center;padding:11px 4px;border-radius:14px;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);
+    font-weight:900;font-size:16px;letter-spacing:.02em;color:rgba(244,240,255,.45);
+    transform:scale(1);transition:transform .09s ease-out, background .18s, color .18s, box-shadow .18s;
+  }
+  .syl.on{
+    color:#12061f;background:linear-gradient(180deg,var(--neon2),var(--neon));
+    transform:scale(1.12);box-shadow:0 6px 22px rgba(255,78,205,.45);
+  }
+
+  /* ---------- 문제 카드 ---------- */
+  .stage{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;min-height:0}
+  .qcard{
+    position:relative;text-align:center;padding:22px 16px 20px;border-radius:22px;
+    background:var(--card);border:1px solid var(--line);
+    box-shadow:0 18px 50px rgba(0,0,0,.35);
+  }
+  .qcard .flag{font-size:52px;line-height:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.4))}
+  .qcard .country{font-size:32px;font-weight:900;margin-top:8px;letter-spacing:-.02em}
+  .qcard .ask{font-size:12px;color:var(--dim);margin-top:6px;letter-spacing:.1em}
+  .ring{position:absolute;top:12px;right:12px;width:46px;height:46px}
+  .ring circle{fill:none;stroke-width:5;stroke-linecap:round}
+  .ring .bg{stroke:rgba(255,255,255,.12)}
+  .ring .fg{stroke:var(--lime);transition:stroke-dashoffset .1s linear,stroke .2s}
+  .ring text{fill:var(--txt);font-size:15px;font-weight:800;text-anchor:middle;dominant-baseline:central}
+
+  /* ---------- 보기 ---------- */
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .opt{
+    position:relative;padding:16px 10px;border-radius:16px;cursor:pointer;
+    background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);
+    font-size:17px;font-weight:800;font-family:inherit;
+    transition:transform .08s, background .15s, border-color .15s;
+  }
+  .opt .key{
+    position:absolute;top:6px;left:9px;font-size:10px;font-weight:700;color:var(--dim);
+  }
+  .opt:active{transform:scale(.96)}
+  .opt.correct{background:linear-gradient(180deg,#7dff9e,#12c46a);color:#062012;border-color:transparent}
+  .opt.wrong{background:linear-gradient(180deg,#ff8b8b,#e03131);color:#2b0505;border-color:transparent}
+  .opt.dim{opacity:.35}
+  .opt[disabled]{cursor:default}
+
+  /* ---------- 음성 모드 ---------- */
+  .voice{display:none;flex-direction:column;align-items:center;gap:12px;padding:6px 0 2px}
+  .voice.on{display:flex}
+  .mic{
+    position:relative;width:82px;height:82px;border-radius:50%;
+    display:grid;place-items:center;font-size:34px;
+    background:linear-gradient(180deg,rgba(62,242,255,.22),rgba(255,78,205,.22));
+    border:1px solid var(--line);
+  }
+  .mic::after{
+    content:'';position:absolute;inset:-8px;border-radius:50%;
+    border:2px solid var(--neon2);opacity:0;
+  }
+  .mic.live::after{animation:ripple 1.4s ease-out infinite}
+  @keyframes ripple{
+    0%{transform:scale(.85);opacity:.7}
+    100%{transform:scale(1.35);opacity:0}
+  }
+  .mic.dead{filter:grayscale(1);opacity:.5}
+  .heard{
+    min-height:26px;font-size:19px;font-weight:800;letter-spacing:-.01em;
+    color:var(--neon2);text-align:center;
+  }
+  .heard.idle{color:var(--dim);font-weight:600;font-size:14px}
+  .hint{
+    font-size:13px;color:var(--gold);min-height:18px;letter-spacing:.05em;font-weight:700;
+  }
+  .modes{display:flex;flex-direction:column;gap:10px;width:100%;max-width:300px}
+  .modebtn{
+    display:flex;align-items:center;gap:12px;text-align:left;
+    padding:14px 18px;border-radius:18px;cursor:pointer;font-family:inherit;color:var(--txt);
+    background:rgba(255,255,255,.06);border:1px solid var(--line);
+  }
+  .modebtn:active{transform:scale(.98)}
+  .modebtn .ico{font-size:26px}
+  .modebtn .t{display:block;font-size:17px;font-weight:900}
+  .modebtn .s{display:block;font-size:11px;color:var(--dim);margin-top:3px;line-height:1.4}
+  .modebtn.primary{background:linear-gradient(100deg,rgba(62,242,255,.9),rgba(255,78,205,.9));color:#160723;border-color:transparent}
+  .modebtn.primary .s{color:rgba(22,7,35,.7)}
+  .warn{font-size:11px;color:#ffb0b0;max-width:300px;line-height:1.6}
+
+  /* ---------- 토스트 ---------- */
+  #toast{
+    position:absolute;left:0;right:0;top:44%;text-align:center;pointer-events:none;
+    font-size:38px;font-weight:900;opacity:0;transform:translateY(10px) scale(.9);
+    text-shadow:0 6px 24px rgba(0,0,0,.5);
+  }
+  #toast.show{animation:pop .7s ease-out}
+  @keyframes pop{
+    0%{opacity:0;transform:translateY(14px) scale(.85)}
+    22%{opacity:1;transform:translateY(-6px) scale(1.08)}
+    70%{opacity:1;transform:translateY(-10px) scale(1)}
+    100%{opacity:0;transform:translateY(-26px) scale(.98)}
+  }
+
+  /* ---------- 오버레이 ---------- */
+  .overlay{
+    position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;
+    background:linear-gradient(180deg,rgba(11,6,32,.86),rgba(11,6,32,.96));
+    backdrop-filter:blur(6px);
+  }
+  .overlay.hide{display:none}
+  .title{
+    font-size:15px;font-weight:800;letter-spacing:.35em;color:var(--neon2);
+  }
+  .big{
+    font-size:40px;font-weight:900;line-height:1.15;letter-spacing:-.03em;
+    background:linear-gradient(100deg,var(--neon2),var(--neon) 55%,var(--gold));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .desc{font-size:14px;line-height:1.75;color:var(--dim);max-width:330px}
+  .desc b{color:var(--txt)}
+  .btn{
+    margin-top:6px;padding:15px 40px;border-radius:999px;border:0;cursor:pointer;
+    font-family:inherit;font-size:18px;font-weight:900;color:#160723;
+    background:linear-gradient(100deg,var(--neon2),var(--neon));
+    box-shadow:0 12px 34px rgba(255,78,205,.4);
+  }
+  .btn:active{transform:scale(.97)}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line);box-shadow:none;font-size:14px;padding:11px 24px}
+  .stats{display:flex;gap:10px;margin-top:4px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 16px;min-width:88px}
+  .stat .lbl{font-size:10px;color:var(--dim);letter-spacing:.08em}
+  .stat .val{font-size:22px;font-weight:900;font-variant-numeric:tabular-nums}
+  #sound{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    color:var(--txt);font-family:inherit;font-size:15px;line-height:1;
+    padding:9px 10px;cursor:pointer;
+  }
+  #sound.off{opacity:.5}
+  @media (max-height:680px){
+    .qcard .flag{font-size:42px}
+    .qcard .country{font-size:27px}
+    .opt{padding:13px 8px;font-size:16px}
+  }
+</style>
+</head>
+<body>
+<div id="pulse"></div>
+<div id="app">
+
+  <div class="hud">
+    <div class="box"><div class="lbl">SCORE</div><div class="val" id="score">0</div></div>
+    <div class="box"><div class="lbl">COMBO</div><div class="val" id="combo">0</div></div>
+    <div class="box"><div class="lbl">BPM</div><div class="val" id="bpm">96</div></div>
+    <div class="hearts" id="hearts"></div>
+    <button id="sound" title="소리 켜기/끄기">🔊</button>
+  </div>
+
+  <div class="chant" id="chant">
+    <div class="syl">움바</div><div class="syl">움바</div><div class="syl">움바리</div><div class="syl">움바</div>
+  </div>
+
+  <div class="stage">
+    <div class="qcard">
+      <svg class="ring" viewBox="0 0 46 46">
+        <circle class="bg" cx="23" cy="23" r="19"></circle>
+        <circle class="fg" id="ringFg" cx="23" cy="23" r="19" transform="rotate(-90 23 23)"></circle>
+        <text x="23" y="24" id="ringTxt">8</text>
+      </svg>
+      <div class="flag" id="flag">🌍</div>
+      <div class="country" id="country">준비!</div>
+      <div class="ask">이 나라의 수도는?</div>
+    </div>
+    <div class="opts" id="opts"></div>
+
+    <div class="voice" id="voicePanel">
+      <div class="mic" id="mic">🎤</div>
+      <div class="heard idle" id="heard">수도 이름을 말해보세요</div>
+      <div class="hint" id="hint"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- 시작 화면 -->
+  <div class="overlay" id="startScreen">
+    <div class="title">움바 움바 움바리 움바</div>
+    <div class="big">세계수도송<br>리듬 퀴즈</div>
+    <div class="desc">
+      후렴이 <b>4박자</b>로 돕니다. 나라가 뜨면 박자가 끝나기 전에 수도를 답하세요.<br>
+      빨리 맞힐수록 점수 ↑, 연속 정답이면 <b>콤보 보너스</b>.<br>
+      5개 맞힐 때마다 <b>템포가 빨라집니다</b>. 하트는 3개!
+    </div>
+    <div class="modes">
+      <button class="modebtn primary" id="modeText">
+        <span class="ico">🔤</span>
+        <span><span class="t">글자 고르기</span><span class="s">4개 보기 중 선택 · 8박자 · 키보드 1~4</span></span>
+      </button>
+      <button class="modebtn" id="modeVoice">
+        <span class="ico">🎤</span>
+        <span><span class="t">목소리로 말하기</span><span class="s">보기 없이 직접 발음 · 12박자 · 마이크 필요</span></span>
+      </button>
+    </div>
+    <div class="warn" id="micWarn"></div>
+  </div>
+
+  <!-- 결과 화면 -->
+  <div class="overlay hide" id="endScreen">
+    <div class="title" id="rank">RESULT</div>
+    <div class="big" id="endTitle">게임 오버</div>
+    <div class="stats">
+      <div class="stat"><div class="lbl">SCORE</div><div class="val" id="fScore">0</div></div>
+      <div class="stat"><div class="lbl">MAX COMBO</div><div class="val" id="fCombo">0</div></div>
+      <div class="stat"><div class="lbl">BEST</div><div class="val" id="fBest">0</div></div>
+    </div>
+    <div class="desc" id="endDesc"></div>
+    <button class="btn" id="retryBtn">다시 도전</button>
+    <button class="btn ghost" id="backBtn">모드 바꾸기</button>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   데이터: 나라 / 수도 / 국기 / 대륙
+   ============================================================ */
+const DATA = [
+  // 아시아
+  {c:'대한민국',cap:'서울',f:'🇰🇷',r:'아시아'},
+  {c:'일본',cap:'도쿄',f:'🇯🇵',r:'아시아'},
+  {c:'중국',cap:'베이징',f:'🇨🇳',r:'아시아'},
+  {c:'몽골',cap:'울란바토르',f:'🇲🇳',r:'아시아'},
+  {c:'베트남',cap:'하노이',f:'🇻🇳',r:'아시아'},
+  {c:'태국',cap:'방콕',f:'🇹🇭',r:'아시아'},
+  {c:'필리핀',cap:'마닐라',f:'🇵🇭',r:'아시아'},
+  {c:'인도네시아',cap:'자카르타',f:'🇮🇩',r:'아시아'},
+  {c:'말레이시아',cap:'쿠알라룸푸르',f:'🇲🇾',r:'아시아'},
+  {c:'인도',cap:'뉴델리',f:'🇮🇳',r:'아시아'},
+  {c:'파키스탄',cap:'이슬라마바드',f:'🇵🇰',r:'아시아'},
+  {c:'네팔',cap:'카트만두',f:'🇳🇵',r:'아시아'},
+  {c:'방글라데시',cap:'다카',f:'🇧🇩',r:'아시아'},
+  {c:'미얀마',cap:'네피도',f:'🇲🇲',r:'아시아'},
+  {c:'캄보디아',cap:'프놈펜',f:'🇰🇭',r:'아시아'},
+  {c:'라오스',cap:'비엔티안',f:'🇱🇦',r:'아시아'},
+  {c:'우즈베키스탄',cap:'타슈켄트',f:'🇺🇿',r:'아시아'},
+  {c:'카자흐스탄',cap:'아스타나',f:'🇰🇿',r:'아시아'},
+  {c:'이란',cap:'테헤란',f:'🇮🇷',r:'아시아'},
+  {c:'이라크',cap:'바그다드',f:'🇮🇶',r:'아시아'},
+  {c:'사우디아라비아',cap:'리야드',f:'🇸🇦',r:'아시아'},
+  {c:'아랍에미리트',cap:'아부다비',f:'🇦🇪',r:'아시아'},
+  {c:'튀르키예',cap:'앙카라',f:'🇹🇷',r:'아시아'},
+  // 유럽
+  {c:'영국',cap:'런던',f:'🇬🇧',r:'유럽'},
+  {c:'프랑스',cap:'파리',f:'🇫🇷',r:'유럽'},
+  {c:'독일',cap:'베를린',f:'🇩🇪',r:'유럽'},
+  {c:'이탈리아',cap:'로마',f:'🇮🇹',r:'유럽'},
+  {c:'스페인',cap:'마드리드',f:'🇪🇸',r:'유럽'},
+  {c:'포르투갈',cap:'리스본',f:'🇵🇹',r:'유럽'},
+  {c:'네덜란드',cap:'암스테르담',f:'🇳🇱',r:'유럽'},
+  {c:'벨기에',cap:'브뤼셀',f:'🇧🇪',r:'유럽'},
+  {c:'스위스',cap:'베른',f:'🇨🇭',r:'유럽'},
+  {c:'오스트리아',cap:'빈',f:'🇦🇹',r:'유럽'},
+  {c:'체코',cap:'프라하',f:'🇨🇿',r:'유럽'},
+  {c:'폴란드',cap:'바르샤바',f:'🇵🇱',r:'유럽'},
+  {c:'헝가리',cap:'부다페스트',f:'🇭🇺',r:'유럽'},
+  {c:'그리스',cap:'아테네',f:'🇬🇷',r:'유럽'},
+  {c:'스웨덴',cap:'스톡홀름',f:'🇸🇪',r:'유럽'},
+  {c:'노르웨이',cap:'오슬로',f:'🇳🇴',r:'유럽'},
+  {c:'핀란드',cap:'헬싱키',f:'🇫🇮',r:'유럽'},
+  {c:'덴마크',cap:'코펜하겐',f:'🇩🇰',r:'유럽'},
+  {c:'아일랜드',cap:'더블린',f:'🇮🇪',r:'유럽'},
+  {c:'러시아',cap:'모스크바',f:'🇷🇺',r:'유럽'},
+  {c:'우크라이나',cap:'키이우',f:'🇺🇦',r:'유럽'},
+  {c:'루마니아',cap:'부쿠레슈티',f:'🇷🇴',r:'유럽'},
+  {c:'크로아티아',cap:'자그레브',f:'🇭🇷',r:'유럽'},
+  {c:'세르비아',cap:'베오그라드',f:'🇷🇸',r:'유럽'},
+  // 아메리카
+  {c:'미국',cap:'워싱턴 D.C.',f:'🇺🇸',r:'아메리카'},
+  {c:'캐나다',cap:'오타와',f:'🇨🇦',r:'아메리카'},
+  {c:'멕시코',cap:'멕시코시티',f:'🇲🇽',r:'아메리카'},
+  {c:'브라질',cap:'브라질리아',f:'🇧🇷',r:'아메리카'},
+  {c:'아르헨티나',cap:'부에노스아이레스',f:'🇦🇷',r:'아메리카'},
+  {c:'칠레',cap:'산티아고',f:'🇨🇱',r:'아메리카'},
+  {c:'페루',cap:'리마',f:'🇵🇪',r:'아메리카'},
+  {c:'콜롬비아',cap:'보고타',f:'🇨🇴',r:'아메리카'},
+  {c:'쿠바',cap:'아바나',f:'🇨🇺',r:'아메리카'},
+  {c:'우루과이',cap:'몬테비데오',f:'🇺🇾',r:'아메리카'},
+  {c:'에콰도르',cap:'키토',f:'🇪🇨',r:'아메리카'},
+  {c:'베네수엘라',cap:'카라카스',f:'🇻🇪',r:'아메리카'},
+  // 아프리카
+  {c:'이집트',cap:'카이로',f:'🇪🇬',r:'아프리카'},
+  {c:'케냐',cap:'나이로비',f:'🇰🇪',r:'아프리카'},
+  {c:'나이지리아',cap:'아부자',f:'🇳🇬',r:'아프리카'},
+  {c:'에티오피아',cap:'아디스아바바',f:'🇪🇹',r:'아프리카'},
+  {c:'모로코',cap:'라바트',f:'🇲🇦',r:'아프리카'},
+  {c:'가나',cap:'아크라',f:'🇬🇭',r:'아프리카'},
+  {c:'탄자니아',cap:'도도마',f:'🇹🇿',r:'아프리카'},
+  {c:'세네갈',cap:'다카르',f:'🇸🇳',r:'아프리카'},
+  {c:'알제리',cap:'알제',f:'🇩🇿',r:'아프리카'},
+  // 오세아니아
+  {c:'호주',cap:'캔버라',f:'🇦🇺',r:'오세아니아'},
+  {c:'뉴질랜드',cap:'웰링턴',f:'🇳🇿',r:'오세아니아'},
+  {c:'피지',cap:'수바',f:'🇫🇯',r:'오세아니아'},
+  {c:'파푸아뉴기니',cap:'포트모르즈비',f:'🇵🇬',r:'오세아니아'},
+];
+
+/* 음성인식이 흔히 잘못 받아쓰는 표기 / 통용 표기 허용 */
+const ALT = {
+  '워싱턴 D.C.':['워싱턴','워싱턴디씨','워싱톤'],
+  '뉴델리':['델리'],
+  '멕시코시티':['멕시코 시티'],
+  '키이우':['키예프','키에프'],
+  '부쿠레슈티':['부카레스트'],
+  '쿠알라룸푸르':['콸라룸푸르'],
+  '울란바토르':['울란바타르'],
+  '아디스아바바':['아디스 아바바'],
+  '부에노스아이레스':['부에노스 아이레스'],
+  '포트모르즈비':['포트 모르즈비'],
+  '브뤼셀':['브뤼쎌','브루셀'],
+  '튀르키예':['터키'],
+  '이슬라마바드':['이슬라마바트'],
+  '스톡홀름':['스톡홀롬'],
+  '코펜하겐':['코펜하건'],
+  '앙카라':['앙카르'],
+  '베이징':['북경'],
+  '도쿄':['동경'],
+  '빈':['비엔나'],
+  '알제':['알지에'],
+  '수바':['수바시'],
+  '네피도':['네피도시','나이피도'],
+};
+
+/* ============================================================
+   오디오 엔진 — 웹오디오로 드럼/베이스/움바 후렴 합성
+   ============================================================ */
+let ac = null, master = null, soundOn = true;
+
+function initAudio(){
+  if(ac) return;
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  master = ac.createGain();
+  master.gain.value = 0.9;
+  master.connect(ac.destination);
+}
+function env(node, t, a, d, peak){
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+  node.connect(g); g.connect(master);
+  return g;
+}
+function kick(t){
+  const o = ac.createOscillator();
+  o.type='sine';
+  o.frequency.setValueAtTime(160, t);
+  o.frequency.exponentialRampToValueAtTime(45, t+0.12);
+  env(o, t, 0.005, 0.22, 0.9);
+  o.start(t); o.stop(t+0.3);
+}
+function noiseBuf(){
+  const len = ac.sampleRate * 0.3;
+  const b = ac.createBuffer(1, len, ac.sampleRate);
+  const d = b.getChannelData(0);
+  for(let i=0;i<len;i++) d[i] = Math.random()*2-1;
+  return b;
+}
+let NB = null;
+function snare(t){
+  if(!NB) NB = noiseBuf();
+  const s = ac.createBufferSource(); s.buffer = NB;
+  const f = ac.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1900; f.Q.value=0.8;
+  s.connect(f);
+  env(f, t, 0.004, 0.14, 0.42);
+  s.start(t); s.stop(t+0.2);
+}
+function hat(t, open){
+  if(!NB) NB = noiseBuf();
+  const s = ac.createBufferSource(); s.buffer = NB;
+  const f = ac.createBiquadFilter(); f.type='highpass'; f.frequency.value=7000;
+  s.connect(f);
+  env(f, t, 0.002, open?0.13:0.045, 0.16);
+  s.start(t); s.stop(t+0.25);
+}
+// "움바" 느낌의 보컬형 신스 (포먼트 필터 두 개)
+function umba(t, freq, long){
+  const o = ac.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(freq, t);
+  o.frequency.linearRampToValueAtTime(freq*0.86, t + (long?0.26:0.16));
+  const f1 = ac.createBiquadFilter(); f1.type='bandpass'; f1.frequency.value=430; f1.Q.value=6;  // "우"
+  const f2 = ac.createBiquadFilter(); f2.type='bandpass'; f2.frequency.value=1180; f2.Q.value=5; // "아"
+  f2.frequency.setValueAtTime(700, t);
+  f2.frequency.linearRampToValueAtTime(1320, t + (long?0.2:0.12));
+  o.connect(f1); f1.connect(f2);
+  env(f2, t, 0.02, long?0.34:0.2, 0.55);
+  o.start(t); o.stop(t + (long?0.5:0.35));
+}
+const BASS = [55, 55, 73.42, 65.41]; // A1 A1 D2 C2
+function bass(t, i){
+  const o = ac.createOscillator();
+  o.type='square';
+  o.frequency.value = BASS[i%4];
+  const f = ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=420;
+  o.connect(f);
+  env(f, t, 0.01, 0.3, 0.28);
+  o.start(t); o.stop(t+0.4);
+}
+function sfx(kind){
+  if(!ac || !soundOn) return;
+  const t = ac.currentTime;
+  if(kind==='ok'){
+    [0,1,2].forEach((n,i)=>{
+      const o = ac.createOscillator(); o.type='triangle';
+      o.frequency.value = [784,988,1318][n];
+      env(o, t+i*0.06, 0.01, 0.16, 0.4);
+      o.start(t+i*0.06); o.stop(t+i*0.06+0.25);
+    });
+  } else if(kind==='no'){
+    const o = ac.createOscillator(); o.type='sawtooth';
+    o.frequency.setValueAtTime(300,t);
+    o.frequency.exponentialRampToValueAtTime(80,t+0.3);
+    const f = ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=900;
+    o.connect(f); env(f,t,0.01,0.32,0.35);
+    o.start(t); o.stop(t+0.4);
+  } else if(kind==='level'){
+    [0,1,2,3].forEach((n,i)=>{
+      const o = ac.createOscillator(); o.type='square';
+      o.frequency.value = [523,659,784,1046][n];
+      env(o, t+i*0.07, 0.01, 0.13, 0.3);
+      o.start(t+i*0.07); o.stop(t+i*0.07+0.2);
+    });
+  }
+}
+
+/* ============================================================
+   비트 스케줄러
+   ============================================================ */
+/* 게임 진행은 performance.now() 기준(오디오가 막혀도 멈추지 않음),
+   소리만 오디오 시계에 맞춰 미리 예약한다. */
+let bpm = 96, nextBeatAt = 0, beat = 0, timerId = null;
+const LOOKAHEAD = 120, TICK = 25; // ms
+const queue = []; // {beat, at}
+
+function scheduler(){
+  const now = performance.now();
+  while(nextBeatAt < now + LOOKAHEAD){
+    if(soundOn && ac && ac.state === 'running'){
+      scheduleBeat(beat, ac.currentTime + Math.max(0, nextBeatAt - now)/1000);
+    }
+    queue.push({beat, at: nextBeatAt});
+    nextBeatAt += 60000 / bpm;
+    beat++;
+  }
+  drainBeats();
+}
+
+// 탭이 백그라운드로 멈췄다 돌아오면 밀린 박자는 건너뛴다(목숨 몰살 방지)
+function drainBeats(){
+  const now = performance.now();
+  const due = [];
+  while(queue.length && queue[0].at <= now) due.push(queue.shift().beat);
+  (due.length > 4 ? due.slice(-1) : due).forEach(onBeat);
+}
+function scheduleBeat(b, t){
+  const inBar = b % 4;
+  if(inBar===0 || inBar===2) kick(t);
+  if(inBar===1 || inBar===3) snare(t);
+  hat(t, false);
+  hat(t + 30/bpm, inBar===3);
+  bass(t, inBar);
+  // 움바 움바 움바리 움바
+  if(inBar===2){ umba(t, 196, true); umba(t + 30/bpm, 233, false); }
+  else umba(t, 196, false);
+}
+function startClock(){
+  try{
+    initAudio();
+    if(ac.state === 'suspended') ac.resume();
+  }catch(_){ /* 소리 없이도 게임은 진행된다 */ }
+  beat = 0;
+  nextBeatAt = performance.now() + 200;
+  if(timerId) clearInterval(timerId);
+  timerId = setInterval(scheduler, TICK);
+}
+function stopClock(){
+  if(timerId){ clearInterval(timerId); timerId = null; }
+  queue.length = 0;
+}
+
+/* ============================================================
+   게임
+   ============================================================ */
+const BEATS = { text:8, voice:12 };
+const RING_C = 2 * Math.PI * 19;
+
+const el = id => document.getElementById(id);
+const $score=el('score'), $combo=el('combo'), $bpm=el('bpm'), $hearts=el('hearts'),
+      $flag=el('flag'), $country=el('country'), $opts=el('opts'), $toast=el('toast'),
+      $ringFg=el('ringFg'), $ringTxt=el('ringTxt'), $syls=[...document.querySelectorAll('.syl')],
+      $pulse=el('pulse'), $voicePanel=el('voicePanel'), $mic=el('mic'),
+      $heard=el('heard'), $hint=el('hint');
+
+$ringFg.style.strokeDasharray = RING_C;
+
+let state = {
+  mode:'text', playing:false, score:0, combo:0, maxCombo:0, lives:3, solved:0,
+  q:null, left:8, total:8, locked:true, pendingNew:false, pool:[]
+};
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function drawQuestion(){
+  if(state.pool.length === 0) state.pool = shuffle([...DATA]);
+  const q = state.pool.pop();
+  // 오답: 같은 대륙 우선, 모자라면 전체에서
+  const same = shuffle(DATA.filter(d => d.r===q.r && d.cap!==q.cap));
+  const rest = shuffle(DATA.filter(d => d.r!==q.r && d.cap!==q.cap));
+  const wrong = [...same, ...rest].slice(0,3).map(d=>d.cap);
+  return { ...q, options: shuffle([q.cap, ...wrong]) };
+}
+
+function renderQuestion(){
+  const q = state.q;
+  $flag.textContent = q.f;
+  $country.textContent = q.c;
+  $opts.innerHTML = '';
+  if(state.mode === 'text'){
+    q.options.forEach((cap, i) => {
+      const b = document.createElement('button');
+      b.className = 'opt';
+      b.innerHTML = `<span class="key">${i+1}</span>${cap}`;
+      b.onclick = () => answer(cap, b);
+      $opts.appendChild(b);
+    });
+  } else {
+    $heard.textContent = micDead ? MIC_MSG : '수도 이름을 말해보세요';
+    $heard.classList.toggle('idle', !micDead);
+    $heard.style.color = micDead ? '#ff8b8b' : '';
+    $hint.textContent = '';
+  }
+  state.total = BEATS[state.mode];
+  state.left = state.total;
+  state.locked = false;
+  updateRing();
+}
+
+function updateRing(){
+  const ratio = state.left / state.total;
+  $ringFg.style.strokeDashoffset = RING_C * (1 - ratio);
+  $ringFg.style.stroke = state.left <= 2 ? '#ff4b4b' : (state.left <= 4 ? '#ffd93d' : '#b4ff3a');
+  $ringTxt.textContent = Math.max(0, state.left);
+}
+
+function toast(txt, color){
+  $toast.textContent = txt;
+  $toast.style.color = color;
+  $toast.classList.remove('show');
+  void $toast.offsetWidth;
+  $toast.classList.add('show');
+}
+
+function answer(cap, btn){
+  if(state.locked || !state.playing) return;
+  state.locked = true;
+  const correct = cap === state.q.cap;
+
+  if(state.mode === 'text'){
+    [...$opts.children].forEach(b => {
+      b.disabled = true;
+      const label = b.textContent.replace(/^\d/,'');
+      if(label === state.q.cap) b.classList.add('correct');
+      else if(b === btn) b.classList.add('wrong');
+      else b.classList.add('dim');
+    });
+  } else {
+    $heard.classList.remove('idle');
+    $heard.textContent = correct ? `⭕ ${state.q.cap}` : `❌ 정답은 ${state.q.cap}`;
+    $heard.style.color = correct ? '#b4ff3a' : '#ff8b8b';
+    $hint.textContent = '';
+  }
+
+  if(correct){
+    const speedBonus = state.left * 12;
+    const comboBonus = Math.min(state.combo, 15) * 10;
+    state.score += 100 + speedBonus + comboBonus;
+    state.combo++;
+    state.maxCombo = Math.max(state.maxCombo, state.combo);
+    state.solved++;
+    sfx('ok');
+    toast(state.combo >= 3 ? `${state.combo} COMBO!` : '정답!', '#b4ff3a');
+    if(state.solved % 5 === 0){
+      bpm = Math.min(168, bpm + 8);
+      setTimeout(()=>{ sfx('level'); toast(`SPEED UP ${bpm}`, '#3ef2ff'); }, 420);
+    }
+  } else {
+    state.combo = 0;
+    state.lives--;
+    sfx('no');
+    toast(cap === null ? '시간초과!' : '땡!', '#ff6b6b');
+  }
+  syncHUD();
+  if(state.lives <= 0){ setTimeout(gameOver, 700); return; }
+  state.pendingNew = true;
+}
+
+function syncHUD(){
+  $score.textContent = state.score.toLocaleString();
+  $combo.textContent = state.combo;
+  $bpm.textContent = bpm;
+  $hearts.innerHTML = [0,1,2].map(i =>
+    `<span class="heart ${i < state.lives ? '' : 'off'}">❤️</span>`).join('');
+}
+
+function onBeat(b){
+  const inBar = b % 4;
+  // 후렴 시각화
+  $syls.forEach((s,i)=> s.classList.toggle('on', i === inBar));
+  $pulse.style.opacity = (inBar===0 || inBar===2) ? '0.55' : '0.22';
+  setTimeout(()=> $pulse.style.opacity = '0', 90);
+
+  if(!state.playing) return;
+
+  // 새 문제는 마디 시작에 맞춰 등장
+  if(state.pendingNew && inBar === 0){
+    state.pendingNew = false;
+    state.q = drawQuestion();
+    renderQuestion();
+    return;
+  }
+  if(state.locked) return;
+
+  state.left--;
+  updateRing();
+  // 음성 모드: 절반 지나면 첫 글자 힌트
+  if(state.mode === 'voice' && state.left === Math.floor(state.total/2)){
+    $hint.textContent = `힌트: ${state.q.cap[0]}${'○'.repeat(Math.max(0, state.q.cap.length-1))}`;
+  }
+  if(state.left <= 0) answer(null, null);
+}
+
+/* ============================================================
+   음성 인식 (Web Speech API)
+   ============================================================ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, micDead = false;
+const MIC_MSG = '🎤 마이크 권한이 필요해요 · 모드 바꾸기 → 글자 고르기';
+
+const norm = s => s.replace(/[\s.,!?·\-]/g,'').toLowerCase();
+
+function lev(a,b){
+  const m=a.length, n=b.length;
+  if(!m||!n) return Math.max(m,n);
+  let prev = Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){
+    const cur=[i];
+    for(let j=1;j<=n;j++){
+      cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1] + (a[i-1]===b[j-1]?0:1));
+    }
+    prev=cur;
+  }
+  return prev[n];
+}
+// 받아쓰기 오차를 감안한 매칭
+function said(heard, target){
+  const h = norm(heard), t = norm(target);
+  if(!h || !t) return false;
+  if(h.includes(t)) return true;      // 짧은 이름(빈 등)은 포함 여부만 본다
+  if(t.length < 2) return false;
+  const tol = t.length <= 3 ? 0 : Math.floor(t.length/4);
+  if(tol === 0) return false;
+  for(let i=0; i + t.length <= h.length + tol; i++){
+    const win = h.slice(i, i + t.length + tol);
+    if(lev(win, t) <= tol) return true;
+  }
+  return false;
+}
+
+function checkSpoken(text){
+  if(!state.playing || state.locked || state.mode !== 'voice' || !state.q) return;
+  const answers = [state.q.cap, ...(ALT[state.q.cap] || [])];
+  if(answers.some(a => said(text, a))){ answer(state.q.cap, null); return; }
+  // 다른 나라 수도를 또렷하게 말했으면 오답 처리
+  const other = DATA.find(d => d.cap !== state.q.cap && said(text, d.cap) && norm(d.cap).length >= 3);
+  if(other) answer(other.cap, null);
+}
+
+function showHeard(t){
+  if(state.locked) return;
+  $heard.classList.remove('idle');
+  $heard.style.color = '';
+  $heard.textContent = t.trim() || '…';
+}
+
+function startRec(){
+  if(!SR) return;
+  if(!rec){
+    rec = new SR();
+    rec.lang = 'ko-KR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 3;
+    rec.onstart = () => { $mic.classList.add('live'); $mic.classList.remove('dead'); };
+    rec.onresult = e => {
+      for(let i = e.resultIndex; i < e.results.length; i++){
+        const res = e.results[i];
+        showHeard(res[0].transcript);
+        for(let j = 0; j < res.length; j++) checkSpoken(res[j].transcript);
+      }
+    };
+    rec.onerror = e => {
+      if(e.error === 'no-speech' || e.error === 'aborted') return;
+      const fatal = e.error === 'not-allowed' || e.error === 'service-not-allowed';
+      if(fatal) micDead = true;
+      $mic.classList.add('dead'); $mic.classList.remove('live');
+      $heard.classList.remove('idle');
+      $heard.style.color = '#ff8b8b';
+      $heard.textContent = fatal ? MIC_MSG : `음성 인식 오류 (${e.error})`;
+    };
+    rec.onend = () => {
+      $mic.classList.remove('live');
+      if(state.playing && state.mode === 'voice' && !micDead){
+        try{ rec.start(); }catch(_){}
+      }
+    };
+  }
+  try{ rec.start(); }catch(_){}
+}
+function stopRec(){
+  $mic.classList.remove('live');
+  if(rec){ try{ rec.abort(); }catch(_){} }
+}
+
+function frame(){
+  drainBeats();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- 시작 / 종료 ---------- */
+function startGame(mode){
+  state = { mode, playing:true, score:0, combo:0, maxCombo:0, lives:3, solved:0,
+            q:null, left:BEATS[mode], total:BEATS[mode], locked:true,
+            pendingNew:true, pool:shuffle([...DATA]) };
+  bpm = 96;
+  syncHUD();
+  $flag.textContent='🌍'; $country.textContent='시작!'; $opts.innerHTML='';
+  $voicePanel.classList.toggle('on', mode === 'voice');
+  el('startScreen').classList.add('hide');
+  el('endScreen').classList.add('hide');
+  startClock();
+  // 음성 모드는 마이크가 반주를 덜 듣도록 볼륨을 낮춘다
+  if(master) master.gain.value = mode === 'voice' ? 0.35 : 0.9;
+  if(mode === 'voice'){
+    micDead = false;
+    $mic.classList.remove('dead');
+    $heard.textContent = '수도 이름을 말해보세요';
+    $heard.classList.add('idle');
+    $heard.style.color = '';
+    $hint.textContent = '';
+    startRec();
+  }
+  toast('움바!', '#ff4ecd');
+}
+
+function gameOver(){
+  state.playing = false;
+  stopClock();
+  stopRec();
+  const key = 'umbaBest_' + state.mode;
+  const best = Math.max(state.score, +(localStorage.getItem(key)||0));
+  localStorage.setItem(key, best);
+  el('fScore').textContent = state.score.toLocaleString();
+  el('fCombo').textContent = state.maxCombo;
+  el('fBest').textContent = best.toLocaleString();
+  const s = state.score;
+  const rank = s>=6000?['🌍 세계수도 마스터','지구 한 바퀴 다 외웠네요!']
+             : s>=3500?['✈️ 베테랑 여행자','대륙 서너 개는 정복!']
+             : s>=1800?['🧭 성실한 탐험가','조금만 더 하면 마스터!']
+             : s>=800 ?['🎒 초보 배낭러','지도 다시 펴볼 시간!']
+             :          ['🐣 첫 출국','움바 움바… 다시 한 번!'];
+  el('rank').textContent = rank[0];
+  el('endTitle').textContent = state.maxCombo >= 10 ? '콤보 폭발!' : '게임 오버';
+  el('endDesc').textContent = rank[1] +
+    ` (${state.mode==='voice'?'🎤 음성':'🔤 글자'} 모드 · 맞힌 수도 ${state.solved}개)`;
+  el('retryBtn').textContent = state.mode==='voice' ? '🎤 다시 도전' : '🔤 다시 도전';
+  el('endScreen').classList.remove('hide');
+}
+
+el('modeText').onclick = () => startGame('text');
+el('modeVoice').onclick = () => {
+  if(!SR){ el('micWarn').textContent = '이 브라우저는 음성 인식을 지원하지 않아요. Chrome/Edge에서 열거나 글자 모드로 즐겨주세요.'; return; }
+  startGame('voice');
+};
+el('retryBtn').onclick = () => startGame(state.mode);
+el('backBtn').onclick = () => {
+  stopClock(); stopRec(); state.playing = false;
+  el('endScreen').classList.add('hide');
+  el('startScreen').classList.remove('hide');
+};
+el('sound').onclick = e => {
+  soundOn = !soundOn;
+  e.currentTarget.textContent = soundOn ? '🔊' : '🔇';
+  e.currentTarget.classList.toggle('off', !soundOn);
+};
+document.addEventListener('keydown', e => {
+  if(!state.playing) { if(e.key==='Enter'||e.key===' ') startGame('text'); return; }
+  if(state.mode !== 'text') return;
+  const n = +e.key;
+  if(n>=1 && n<=4 && $opts.children[n-1]) $opts.children[n-1].click();
+});
+
+// 마이크 사용 가능 여부 안내
+(function micNotice(){
+  const w = el('micWarn');
+  if(!SR) w.textContent = '⚠️ 음성 모드는 Chrome·Edge에서만 동작해요.';
+  else if(location.protocol === 'file:')
+    w.textContent = '⚠️ 파일로 직접 열면 마이크가 차단될 수 있어요. 음성 모드가 안 되면 localhost로 열어주세요.';
+})();
+
+syncHUD();
+</script>
+</body>
+</html>
