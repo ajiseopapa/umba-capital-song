@@ -404,14 +404,22 @@ const ALT = {
 /* ============================================================
    오디오 엔진 — 웹오디오로 드럼/베이스/움바 후렴 합성
    ============================================================ */
-let ac = null, master = null, soundOn = true;
+let ac = null, master = null, limiter = null, soundOn = true;
 
 function initAudio(){
   if(ac) return;
   ac = new (window.AudioContext || window.webkitAudioContext)();
   master = ac.createGain();
-  master.gain.value = 0.9;
-  master.connect(ac.destination);
+  master.gain.value = 0.85;
+  // 악기가 한꺼번에 때릴 때 찌그러지지 않도록 리미터를 건다
+  limiter = ac.createDynamicsCompressor();
+  limiter.threshold.value = -8;
+  limiter.knee.value = 6;
+  limiter.ratio.value = 14;
+  limiter.attack.value = 0.003;
+  limiter.release.value = 0.2;
+  master.connect(limiter);
+  limiter.connect(ac.destination);
 }
 function env(node, t, a, d, peak){
   const g = ac.createGain();
@@ -421,13 +429,18 @@ function env(node, t, a, d, peak){
   node.connect(g); g.connect(master);
   return g;
 }
-function kick(t){
+function kick(t, soft){
   const o = ac.createOscillator();
   o.type='sine';
-  o.frequency.setValueAtTime(160, t);
-  o.frequency.exponentialRampToValueAtTime(45, t+0.12);
-  env(o, t, 0.005, 0.22, 0.9);
-  o.start(t); o.stop(t+0.3);
+  o.frequency.setValueAtTime(180, t);
+  o.frequency.exponentialRampToValueAtTime(48, t+0.1);
+  env(o, t, 0.005, soft ? 0.13 : 0.24, soft ? 0.45 : 0.95);
+  o.start(t); o.stop(t+0.35);
+  // 몸통을 채우는 저역 한 겹
+  const s = ac.createOscillator();
+  s.type='sine'; s.frequency.value = 55;
+  env(s, t, 0.01, soft ? 0.1 : 0.18, soft ? 0.2 : 0.4);
+  s.start(t); s.stop(t+0.3);
 }
 function noiseBuf(){
   const len = ac.sampleRate * 0.3;
@@ -437,21 +450,33 @@ function noiseBuf(){
   return b;
 }
 let NB = null;
-function snare(t){
+// 손뼉 — 짧은 노이즈를 세 번 겹쳐 사람 손뼉처럼
+function clap(t){
   if(!NB) NB = noiseBuf();
-  const s = ac.createBufferSource(); s.buffer = NB;
-  const f = ac.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1900; f.Q.value=0.8;
-  s.connect(f);
-  env(f, t, 0.004, 0.14, 0.42);
-  s.start(t); s.stop(t+0.2);
+  [0, 0.012, 0.024].forEach((d, i) => {
+    const s = ac.createBufferSource(); s.buffer = NB;
+    const f = ac.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1500; f.Q.value=1.1;
+    s.connect(f);
+    env(f, t + d, 0.002, i === 2 ? 0.16 : 0.05, i === 2 ? 0.4 : 0.26);
+    s.start(t + d); s.stop(t + d + 0.25);
+  });
 }
-function hat(t, open){
+// 셰이커 / 탬버린
+function shaker(t, accent){
   if(!NB) NB = noiseBuf();
   const s = ac.createBufferSource(); s.buffer = NB;
-  const f = ac.createBiquadFilter(); f.type='highpass'; f.frequency.value=7000;
+  const f = ac.createBiquadFilter(); f.type='highpass'; f.frequency.value = accent ? 6000 : 8000;
   s.connect(f);
-  env(f, t, 0.002, open?0.13:0.045, 0.16);
-  s.start(t); s.stop(t+0.25);
+  env(f, t, 0.003, accent ? 0.09 : 0.04, accent ? 0.15 : 0.075);
+  s.start(t); s.stop(t + 0.2);
+}
+function tamb(t){
+  if(!NB) NB = noiseBuf();
+  const s = ac.createBufferSource(); s.buffer = NB;
+  const f = ac.createBiquadFilter(); f.type='bandpass'; f.frequency.value=9000; f.Q.value=0.6;
+  s.connect(f);
+  env(f, t, 0.004, 0.22, 0.2);
+  s.start(t); s.stop(t + 0.35);
 }
 // "움바" 느낌의 보컬형 신스 (포먼트 필터 두 개)
 function umba(t, freq, long){
@@ -467,47 +492,62 @@ function umba(t, freq, long){
   env(f2, t, 0.02, long?0.34:0.2, 0.55);
   o.start(t); o.stop(t + (long?0.5:0.35));
 }
-/* 멜로디 훅 — 2마디(8분음표 16칸), A단조 펜타토닉 자작 리프 */
-const A4=440, C5=523.25, D5=587.33, E5=659.25, G4=392, G5=783.99;
-const LEAD = [
-  A4, 0,  C5, D5,  E5, 0,  D5, C5,
-  A4, 0,  C5, D5,  G5, 0,  E5, 0
+/* ---------- 자작 편곡: 4마디 순환 (Am - F - C - G) ---------- */
+const N = { F3:174.61, G3:196, A3:220, B3:246.94, C4:261.63, D4:293.66, E4:329.63, F4:349.23,
+            G4:392, A4:440, B4:493.88, C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880 };
+// 마디별 8분음표 8칸 마림바 훅 (0 = 쉼표)
+const MEL = [
+  [N.A4, 0, N.C5, N.E5, 0, N.D5, N.C5, N.A4],   // Am
+  [N.F4, 0, N.A4, N.C5, 0, N.C5, N.A4, N.F4],   // F
+  [N.C5, 0, N.E5, N.G5, 0, N.E5, N.D5, N.C5],   // C
+  [N.B4, 0, N.D5, N.G5, 0, N.G5, N.D5, N.B4],   // G
 ];
-function lead(t, f){
-  if(!f) return;
-  const o1 = ac.createOscillator(), o2 = ac.createOscillator();
-  o1.type = 'square';   o1.frequency.value = f;
-  o2.type = 'triangle'; o2.frequency.value = f * 1.006;
-  const flt = ac.createBiquadFilter();
-  flt.type = 'lowpass';
-  flt.frequency.setValueAtTime(3000, t);
-  flt.frequency.exponentialRampToValueAtTime(950, t + 0.2);
-  o1.connect(flt); o2.connect(flt);
-  env(flt, t, 0.008, 0.19, 0.2);
-  o1.start(t); o1.stop(t + 0.32);
-  o2.start(t); o2.stop(t + 0.32);
-}
+const CHORD = [                                  // 브라스 스탭용 3화음
+  [N.A3, N.C4, N.E4], [N.F3, N.A3, N.C4], [N.C4, N.E4, N.G4], [N.G3, N.B3, N.D4],
+];
+const ROOT = [55, 43.65, 65.41, 49];             // A1 F1 C2 G1
 
-const BASS = [55, 55, 73.42, 65.41]; // A1 A1 D2 C2
-function bass(t, i){
-  const o = ac.createOscillator();
-  o.type='square';
-  o.frequency.value = BASS[i%4];
-  const f = ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=420;
-  o.connect(f);
-  env(f, t, 0.01, 0.3, 0.28);
-  o.start(t); o.stop(t+0.4);
+// 마림바 — 기음 + 4배음, 빠른 감쇠
+function marimba(t, f, vel=1){
+  if(!f) return;
+  const o1 = ac.createOscillator(); o1.type='sine'; o1.frequency.value = f;
+  const o2 = ac.createOscillator(); o2.type='sine'; o2.frequency.value = f * 4;
+  env(o1, t, 0.004, 0.42, 0.34 * vel);
+  env(o2, t, 0.003, 0.09, 0.07 * vel);
+  o1.start(t); o1.stop(t + 0.6);
+  o2.start(t); o2.stop(t + 0.2);
+}
+// 브라스 스탭 — 톱니 3화음에 필터 엔벨로프
+function brass(t, chord, vel=1){
+  chord.forEach(f => {
+    const o = ac.createOscillator(); o.type='sawtooth'; o.frequency.value = f;
+    const flt = ac.createBiquadFilter(); flt.type='lowpass';
+    flt.frequency.setValueAtTime(700, t);
+    flt.frequency.exponentialRampToValueAtTime(2800, t + 0.04);
+    flt.frequency.exponentialRampToValueAtTime(800, t + 0.22);
+    o.connect(flt);
+    env(flt, t, 0.015, 0.2, 0.075 * vel);
+    o.start(t); o.stop(t + 0.35);
+  });
+}
+// 통통 튀는 베이스
+function bass(t, f, vel=1){
+  const o = ac.createOscillator(); o.type='triangle'; o.frequency.value = f;
+  const sub = ac.createOscillator(); sub.type='sine'; sub.frequency.value = f;
+  const flt = ac.createBiquadFilter(); flt.type='lowpass';
+  flt.frequency.setValueAtTime(1400, t);
+  flt.frequency.exponentialRampToValueAtTime(360, t + 0.16);
+  o.connect(flt);
+  env(flt, t, 0.008, 0.2, 0.34 * vel);
+  env(sub, t, 0.01, 0.18, 0.22 * vel);
+  o.start(t); o.stop(t + 0.4);
+  sub.start(t); sub.stop(t + 0.35);
 }
 function sfx(kind){
   if(!ac || !soundOn) return;
   const t = ac.currentTime;
   if(kind==='ok'){
-    [0,1,2].forEach((n,i)=>{
-      const o = ac.createOscillator(); o.type='triangle';
-      o.frequency.value = [784,988,1318][n];
-      env(o, t+i*0.06, 0.01, 0.16, 0.4);
-      o.start(t+i*0.06); o.stop(t+i*0.06+0.25);
-    });
+    [N.C5, N.E5, N.G5, N.C5*2].forEach((f,i)=> marimba(t + i*0.055, f, 1.1));
   } else if(kind==='no'){
     const o = ac.createOscillator(); o.type='sawtooth';
     o.frequency.setValueAtTime(300,t);
@@ -516,12 +556,8 @@ function sfx(kind){
     o.connect(f); env(f,t,0.01,0.32,0.35);
     o.start(t); o.stop(t+0.4);
   } else if(kind==='level'){
-    [0,1,2,3].forEach((n,i)=>{
-      const o = ac.createOscillator(); o.type='square';
-      o.frequency.value = [523,659,784,1046][n];
-      env(o, t+i*0.07, 0.01, 0.13, 0.3);
-      o.start(t+i*0.07); o.stop(t+i*0.07+0.2);
-    });
+    [CHORD[0], CHORD[2], CHORD[3]].forEach((c,i)=> brass(t + i*0.13, c, 1.4));
+    tamb(t + 0.26);
   }
 }
 
@@ -588,20 +624,37 @@ function drainBeats(){
   while(queue.length && queue[0].at <= now) due.push(queue.shift().beat);
   (due.length > 4 ? due.slice(-1) : due).forEach(onBeat);
 }
+const SWING = 0.08;   // 뒷박 8분음표를 살짝 늦춰 통통 튀는 그루브를 만든다
 function scheduleBeat(b, t){
-  const inBar = b % 4, eighth = 30/bpm;
-  if(inBar===0 || inBar===2) kick(t);
-  if(inBar===1 || inBar===3) snare(t);
-  hat(t, false);
-  hat(t + eighth, inBar===3);
-  bass(t, inBar);
-  // 멜로디 훅 (2마디 순환)
-  const li = (b % 8) * 2;
-  lead(t, LEAD[li]);
-  lead(t + eighth, LEAD[li+1]);
+  const inBar = b % 4;
+  const bar = Math.floor(b / 4) % 4;          // Am - F - C - G 순환
+  const beatDur = 60 / bpm;
+  const t2 = t + beatDur * (0.5 + SWING);     // 뒷박
+
+  // 드럼 — 킥 1·3, 손뼉 2·4, 셰이커는 8분음표마다
+  if(inBar === 0 || inBar === 2) kick(t);
+  if(inBar === 3) kick(t2, true);             // 다음 마디로 밀어주는 픽업
+  if(inBar === 1 || inBar === 3) clap(t);
+  shaker(t, inBar % 2 === 0);
+  shaker(t2, false);
+  if(bar === 3 && inBar === 3) tamb(t2);      // 4마디 끝 탬버린
+
+  // 베이스 — 루트 / 옥타브로 통통
+  const root = ROOT[bar];
+  bass(t, inBar === 2 ? root * 2 : root);
+  if(inBar === 1 || inBar === 3) bass(t2, root * 2, 0.6);
+
+  // 마림바 훅
+  marimba(t,  MEL[bar][inBar * 2]);
+  marimba(t2, MEL[bar][inBar * 2 + 1], 0.8);
+
+  // 브라스 스탭 — 마디 머리와 3박 뒷박
+  if(inBar === 0) brass(t, CHORD[bar]);
+  else if(inBar === 2) brass(t2, CHORD[bar], 0.7);
+
   // 보컬 챈트를 못 쓰면 신스로 "움바 움바 움바리 움바"를 흉내낸다
   if(!chantSpeaks()){
-    if(inBar===2){ umba(t, 196, true); umba(t + eighth, 233, false); }
+    if(inBar === 2){ umba(t, 196, true); umba(t2, 233, false); }
     else umba(t, 196, false);
   }
 }
@@ -889,7 +942,7 @@ function startGame(mode){
   el('endScreen').classList.add('hide');
   startClock();
   // 음성 모드는 마이크가 반주를 덜 듣도록 볼륨을 낮춘다
-  if(master) master.gain.value = mode === 'voice' ? 0.35 : 0.9;
+  if(master) master.gain.value = mode === 'voice' ? 0.32 : 0.85;
   // 챈트 버튼 상태 (음성 모드에서는 인식 방해를 막으려 꺼둔다)
   el('chant').classList.toggle('off', !chantOn || mode === 'voice');
   el('chant').disabled = mode === 'voice';
