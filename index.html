@@ -49,14 +49,21 @@
   }
 
   /* ---------- 상단 HUD ---------- */
-  .hud{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
+  .hud{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;font-variant-numeric:tabular-nums}
   .hud .box{
     background:var(--card);border:1px solid var(--line);border-radius:12px;
     padding:7px 11px;line-height:1.15;
   }
   .hud .lbl{font-size:10px;color:var(--dim);letter-spacing:.08em}
   .hud .val{font-size:17px;font-weight:800}
-  .hearts{margin-left:auto;font-size:18px;letter-spacing:1px}
+  .hearts{margin-left:auto;font-size:18px;letter-spacing:1px;white-space:nowrap}
+  @media (max-width:420px){
+    .hud{gap:6px}
+    .hud .box{padding:6px 8px}
+    .hud .val{font-size:15px}
+    .hearts{font-size:13px;letter-spacing:0}
+    #sound,#chant{font-size:13px;padding:8px 7px}
+  }
   .heart.off{opacity:.2;filter:grayscale(1)}
   #combo{color:var(--gold)}
 
@@ -534,10 +541,16 @@ if(TTS){ pickVoice(); TTS.addEventListener('voiceschanged', pickVoice); }
 // TTS를 쓸 수 있는 상황인가 (음성 모드에서는 마이크가 챈트를 주워듣지 않도록 끈다)
 const chantSpeaks = () => !!TTS && chantOn && soundOn && state.mode !== 'voice';
 
-function speakChant(){
+// 두 마디 한 세트: "움바 움바 움바리 움바" → "움바 움바 세계수도송"
+const CHANT = [
+  { say:'움바 움바 움바리 움바', chips:['움바','움바','움바리','움바'] },
+  { say:'움바 움바 세계수도송', chips:['움바','움바','세계','수도송'] },
+];
+
+function speakChant(barIdx){
   if(!chantSpeaks()) return;
   if(TTS.speaking || TTS.pending) return;   // 밀리면 그 마디는 건너뛴다
-  const u = new SpeechSynthesisUtterance('움바 움바 움바리 움바');
+  const u = new SpeechSynthesisUtterance(CHANT[barIdx % CHANT.length].say);
   if(koVoice) u.voice = koVoice;
   u.lang = 'ko-KR';
   u.rate = Math.min(1.9, Math.max(0.9, bpm/96));   // 템포에 비례 (한 마디 안에 들어오게)
@@ -734,7 +747,12 @@ function syncHUD(){
 
 function onBeat(b){
   const inBar = b % 4;
-  if(inBar === 0) speakChant();   // 마디 머리마다 "움바 움바 움바리 움바"
+  if(inBar === 0){                       // 마디 머리마다 후렴 한 소절
+    const bar = Math.floor(b / 4);
+    speakChant(bar);
+    const chips = CHANT[bar % CHANT.length].chips;
+    $syls.forEach((s, i) => { if(s.textContent !== chips[i]) s.textContent = chips[i]; });
+  }
   // 후렴 시각화
   $syls.forEach((s,i)=> s.classList.toggle('on', i === inBar));
   $pulse.style.opacity = (inBar===0 || inBar===2) ? '0.55' : '0.22';
